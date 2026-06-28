@@ -114,54 +114,45 @@ No label is enforced. Creators may provide additional context via appeal.
 
 ## 4. Appeals Workflow
 
-## Who can submit an appeal?
+Who can submit an appeal?  
+Any authenticated creator or content author  
 
-Any authenticated creator or content author
-
----
-
-## Required input:
-
+Required input:
 ```json
 {
   "content_id": "...",
   "reason": "Explanation of why classification is incorrect",
   "optional_context": "e.g., drafting notes, edit history"
 }
+```
 
-4. Appeals Workflow
-Who can submit an appeal?
-Any authenticated creator or content author
-Required input:
-{
-  "content_id": "...",
-  "reason": "Explanation of why classification is incorrect",
-  "optional_context": "e.g., drafting notes, edit history"
-}
 System behavior on appeal:
-Retrieve original classification record
-
+Retrieve original classification record  
 Update content status:
 
-status = "under_review"
-Append appeal record to audit log
+status = "under_review"  
+
+Append appeal record to audit log  
 Store:
-content_id
-original classification
-confidence score
-creator reason
-timestamp
+content_id  
+original classification  
+confidence score  
+creator reason  
+timestamp  
+
 What a reviewer sees:
-Original text
-LLM score + stylometric score
-Final confidence score
-System-generated label
-Creator appeal explanation
-Current status: under_review
+Original text  
+LLM score + stylometric score  
+Final confidence score  
+System-generated label  
+Creator appeal explanation  
+Current status: under_review  
 
 No automatic reclassification is required.
 
-### 5. Anticipated Edge Cases
+---
+
+## 5. Anticipated Edge Cases
 
 ## Edge Case 1: Highly Repetitive Poetry
 
@@ -250,6 +241,7 @@ Client
       → Append to Audit Log  
       → Store appeal metadata  
       → API Response (confirmation)
+
 ## Narrative Summary 
 
 The system processes submitted text through two independent detection signals: an LLM-based semantic classifier and a stylometric heuristic analyzer. Their outputs are combined into a calibrated confidence score, which is mapped to a transparency label shown to the user. Appeals allow creators to challenge decisions, updating system state and preserving full audit traceability.
@@ -260,22 +252,21 @@ The system processes submitted text through two independent detection signals: a
 
 Spec sections provided to AI:
 
-- Detection Signals (LLM signal only)  
-- Architecture diagram  
-- API surface (POST /submit)  
+Detection Signals (LLM signal only)  
+Architecture diagram  
+API surface (POST /submit)  
 
 Task for AI tool:
 
-- Flask app skeleton  
-- `/submit` endpoint  
-- Groq LLM classification function  
+Flask app skeleton  
+/submit endpoint  
+Groq LLM classification function  
 
 Verification:
 
-Test `/submit` with:  
-- clearly AI-like text  
-- clearly human-like text  
-
+Test /submit with:  
+clearly AI-like text  
+clearly human-like text  
 Confirm LLM score varies meaningfully  
 
 ---
@@ -284,21 +275,21 @@ Confirm LLM score varies meaningfully
 
 Spec sections provided:
 
-- Detection Signals (both signals)  
-- Uncertainty Representation  
-- Architecture diagram  
+Detection Signals (both signals)  
+Uncertainty Representation  
+Architecture diagram  
 
 Task:
 
-- Implement stylometric function  
-- Implement scoring fusion logic  
-- Return calibrated confidence  
+Implement stylometric function  
+Implement scoring fusion logic  
+Return calibrated confidence  
 
 Verification:
 
 Compare outputs across:  
-- repetitive AI text  
-- varied human writing  
+repetitive AI text  
+varied human writing  
 
 Ensure non-binary distribution (no clustering at 0.5 or 1.0)  
 
@@ -308,23 +299,23 @@ Ensure non-binary distribution (no clustering at 0.5 or 1.0)
 
 Spec sections provided:
 
-- Transparency Label Design  
-- Appeals Workflow  
-- Architecture diagram  
+Transparency Label Design  
+Appeals Workflow  
+Architecture diagram  
 
 Task:
 
-- Implement label generator  
-- Implement `/appeal` endpoint  
-- Implement audit log updates  
+Implement label generator  
+Implement /appeal endpoint  
+Implement audit log updates  
 
 Verification:
 
 All 3 label states reachable:  
-- AI  
-- Human  
-- Uncertain  
+AI  
+Human  
+Uncertain  
 
 Submit appeal → verify:  
-- status = under_review  
-- audit log updated
+status = under_review  
+audit log updated  
