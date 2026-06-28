@@ -1,4 +1,8 @@
 # 1. Detection Signals
+First need to do->
+pip3 install flask flask-limiter requests python-dotenv
+<img width="1693" height="929" alt="image" src="https://github.com/user-attachments/assets/a1ea5176-4727-4dd4-8606-51cfafa045fc" />
+
 
 ## Signal 1: LLM-Based Classification (Groq Llama 3.3)
 
