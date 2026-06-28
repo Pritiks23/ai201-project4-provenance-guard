@@ -1,276 +1,330 @@
-# 1. Architecture Narrative
+# 1. Detection Signals
 
-A creator submits text to the `POST /submit` endpoint.
+## Signal 1: LLM-Based Classification (Groq Llama 3.3)
 
-The API first passes the text through a rate limiter to prevent abuse. If the request is allowed, the text enters the attribution pipeline. The pipeline sends the content to two independent detection signals.
+### What it measures
+- Semantic + stylistic likelihood of AI vs human authorship  
+- Coherence, fluency, repetitiveness, and structural regularity  
 
-**Signal 1** is an LLM-based classifier using Groq's Llama 3.3 model, which evaluates whether the writing appears AI-generated or human-written and returns a score.
+### Output
+- `llm_score ∈ [0, 1]`  
+  - 0 → strongly human-like  
+  - 1 → strongly AI-like  
 
-**Signal 2** is a stylometric analyzer implemented in Python that computes measurable writing characteristics such as:
-
-- Sentence length variance
-- Vocabulary diversity (type-token ratio)
-- Punctuation density
-
-Each signal produces an independent score.
-
-The confidence scoring module combines both signal outputs into a final attribution confidence score. Rather than forcing a binary decision, the system uses confidence thresholds to distinguish between:
-
-- High-confidence AI-generated content
-- High-confidence human-written content
-- Uncertain results
-
-The transparency label generator converts the classification into plain language that a non-technical user can understand.
-
-The final decision, confidence score, signal outputs, timestamp, and content identifier are stored in the audit log. The API then returns the attribution result, confidence score, and transparency label to the client.
-
-If a creator disagrees with the result, they can submit an appeal through the `POST /appeal` endpoint. The appeal stores the creator's explanation, links it to the original decision, updates the content status to `"under review"`, and records the action in the audit log.
+### Blind spots
+- May misclassify highly polished human writing as AI-like  
+- Can be bypassed by prompt-engineered or heavily paraphrased AI text  
 
 ---
 
-# 2. Detection Signals
+## Signal 2: Stylometric Heuristics (Python-based)
 
-## Signal 1: Groq LLM Classification
+### What it measures
+- Sentence length variance  
+- Vocabulary diversity (type-token ratio)  
+- Punctuation density  
+- Repetition patterns  
 
-### Measures
+### Output
+- `style_score ∈ [0, 1]`  
+  - 0 → human-like variability  
+  - 1 → AI-like uniformity  
 
-The overall semantic and stylistic characteristics of the text.
-
-### Why It Helps
-
-Large language models can recognize patterns commonly found in AI-generated writing, including:
-
-- Overly consistent tone
-- Excessive structure
-- Predictable transitions
-- Repetitive phrasing
-- Generic explanations
-
-### Blind Spots
-
-The model can be fooled by:
-
-- Skilled human writers
-- Heavily edited AI-generated content
-- Creative writing styles
-- Poetry
+### Blind spots
+- Formal human writing may appear “AI-like”  
+- Short texts are statistically unstable  
+- Cannot capture semantic intent  
 
 ---
 
-## Signal 2: Stylometric Heuristics
+## Signal Combination Strategy
 
-### Measures
-
-Statistical writing characteristics, including:
-
-- Sentence length variance
-- Type-token ratio
-- Average sentence length
-- Punctuation density
-
-### Why It Helps
-
-AI-generated writing often exhibits:
-
-- More uniform sentence lengths
-- Lower variation
-- Consistent structure
-- Repeated vocabulary patterns
-
-Human writing tends to be less predictable and more varied.
-
-### Blind Spots
-
-Stylometry cannot understand meaning or intent.
-
-Potential failure cases include:
-
-- A human intentionally writing in a formal, structured style may appear AI-generated.
-- An AI system prompted to imitate human writing may appear human-written.
-
-# 3. Confidence Strategy
-
-This is arguably the most important design decision.
-
-False positives are worse than false negatives.
-
-Therefore, the system uses a three-zone confidence threshold model:
-
-| Combined Score | Result |
-|----------------|--------|
-| 0.00 – 0.35    | Human |
-| 0.35 – 0.65    | Uncertain |
-| 0.65 – 1.00    | AI |
-
-The uncertain zone is intentionally wide to reduce the chance of falsely accusing human authors.
-
-## Example 1
-
-LLM score = 0.80  
-Stylometric score = 0.70  
-
-Final score = 0.75  
-
-→ High-confidence AI
-
-## Example 2
-
-LLM score = 0.55  
-Stylometric score = 0.48  
-
-Final score = 0.515  
-
-→ Uncertain
-
----
-
-# 4. Transparency Labels
-
-These labels should be written exactly as shown in your README.
-
-## High-Confidence AI  
-**AI-Generated Content Likely**
-
-Our analysis found strong indicators that this content was generated using AI tools.
-
-**Confidence: 92%**
-
-If you believe this result is incorrect, you may submit an appeal for manual review.
-
----
-
-## High-Confidence Human  
-**Human-Written Content Likely**
-
-Our analysis found strong indicators that this content was written by a human author.
-
-**Confidence: 90%**
-
-This result is probabilistic and not a guarantee.
-
----
-
-## Uncertain  
-**Attribution Uncertain**
-
-Our system found mixed evidence and cannot confidently determine whether this content was written by a human or generated by AI.
-
-**Confidence: 54%**
-
-No action has been taken. Creators may submit additional context through the appeals process.
-
-# 5. API Surface
-
-You only need a few endpoints.
-
----
-
-## POST /submit
-
-### Input
-
-```json
-{
-  "content": "text to analyze"
-}
-Output
-{
-  "content_id": 1,
-  "classification": "uncertain",
-  "confidence": 0.54,
-  "label": "Attribution Uncertain..."
-}
-POST /appeal
-Input
-{
-  "content_id": 1,
-  "reason": "I wrote this article myself."
-}
-Output
-{
-  "status": "under_review",
-  "message": "Appeal submitted."
-}
-GET /log
-Output
-[
-  {
-    "content_id": 1,
-    "classification": "human",
-    "confidence": 0.82
-  }
-]
-POST /verify-human
-
-For the provenance certificate.
-
-Input
-{
-  "creator_name": "Alice"
-}
-Output
-{
-  "verified_human": true,
-  "badge": "Verified Human Creator"
-}
-# 6. Provenance Certificate
-
-The creator performs an additional verification step.
-
-For this project, verification is intentionally simple:
-
-- The creator submits a verification request
-- The system records the verification
-- The creator receives a badge
-
-### Display
-
-✓ Verified Human Creator
-
-When content is shown:
-
-Author: Alice  
-✓ Verified Human Creator
-
-This satisfies the provenance certificate requirement without requiring a complex identity infrastructure.
-
----
-
-# 7. Rate Limiting
-
-A reasonable limit is:
-
-**10 submissions per minute per IP**
+### Final score
+- `final_score = 0.6 * llm_score + 0.4 * style_score`
 
 ### Reasoning
+- LLM signal captures semantic meaning → higher weight  
+- Stylometry provides structural grounding → secondary but stabilizing signal  
 
-- Normal users are unlikely to submit more than a few pieces per minute
-- Prevents automated scraping or abuse/testing attacks
-- Simple to justify in documentation
+## 2. Uncertainty Representation
 
-### Flask-Limiter Implementation
+### What does a score of 0.6 mean?
 
-```python
-@limiter.limit("10 per minute")
+A score of 0.6 means:
 
-# 8. Audit Log Structure
+> “Slight leaning toward AI-generated text, but not reliable enough for enforcement.”
 
-Every submission should store:
+We explicitly treat all results as probabilistic, not deterministic.
+
+---
+
+### Confidence Calibration
+
+We map raw score into user-facing categories:
+
+| Range | Label |
+|------|------|
+| 0.00 – 0.35 | Likely Human |
+| 0.35 – 0.65 | Uncertain |
+| 0.65 – 1.00 | Likely AI |
+
+---
+
+### Design Principle
+
+We intentionally widen the uncertainty band.
+
+- False positives (flagging human writing as AI) are considered worse than false negatives  
+- Therefore, we require stronger evidence before making a “high-confidence AI” claim  
+
+---
+
+## 3. Transparency Label Design
+
+### High-Confidence AI (≥ 0.65)
+**AI-Generated Content Likely**
+
+Our system detected strong signals that this content was generated using AI tools.
+
+**Confidence:** {confidence * 100:.0f}%
+
+This result is automated and may be incorrect. You may submit an appeal for review.
+
+---
+
+### High-Confidence Human (≤ 0.35)
+**Human-Written Content Likely**
+
+Our system detected strong signals that this content was written by a human author.
+
+**Confidence:** {confidence * 100:.0f}%
+
+This result is probabilistic and not definitive.
+
+---
+
+### Uncertain (0.35 – 0.65)
+**Attribution Uncertain**
+
+Our system found mixed signals and cannot reliably classify this content.
+
+**Confidence:** {confidence * 100:.0f}%
+
+No label is enforced. Creators may provide additional context via appeal.
+
+## 4. Appeals Workflow
+
+## Who can submit an appeal?
+
+Any authenticated creator or content author
+
+---
+
+## Required input:
 
 ```json
 {
-  "content_id": 1,
-  "timestamp": "2026-06-28T12:00:00",
-  "classification": "AI",
-  "confidence": 0.91,
-  "llm_score": 0.95,
-  "stylometric_score": 0.87,
-  "appeal": null
+  "content_id": "...",
+  "reason": "Explanation of why classification is incorrect",
+  "optional_context": "e.g., drafting notes, edit history"
 }
-Appeal Entry
+
+4. Appeals Workflow
+Who can submit an appeal?
+Any authenticated creator or content author
+Required input:
 {
-  "content_id": 1,
-  "event": "appeal_submitted",
-  "reason": "I wrote this myself",
-  "status": "under_review"
+  "content_id": "...",
+  "reason": "Explanation of why classification is incorrect",
+  "optional_context": "e.g., drafting notes, edit history"
 }
+System behavior on appeal:
+Retrieve original classification record
+
+Update content status:
+
+status = "under_review"
+Append appeal record to audit log
+Store:
+content_id
+original classification
+confidence score
+creator reason
+timestamp
+What a reviewer sees:
+Original text
+LLM score + stylometric score
+Final confidence score
+System-generated label
+Creator appeal explanation
+Current status: under_review
+
+No automatic reclassification is required.
+
+### 5. Anticipated Edge Cases
+
+## Edge Case 1: Highly Repetitive Poetry
+
+Example:
+
+“I am here I am here I am here…”
+
+Issue:
+
+Stylometric signal detects extreme repetition → high AI score  
+But this is valid human poetic style  
+
+Failure mode:
+
+False positive AI classification  
+
+---
+
+## Edge Case 2: Highly Formal Academic Writing
+
+Example:
+
+Dense research abstract with uniform sentence structure  
+
+Issue:
+
+Low variance in sentence length  
+High lexical density resembles LLM output  
+
+Failure mode:
+
+Human writing misclassified as AI  
+
+---
+
+## Edge Case 3: Short Text Inputs (< 2 sentences)
+
+Issue:
+
+Stylometric metrics become unreliable  
+
+Failure mode:
+
+Overconfident classification from insufficient data  
+
+---
+
+## Edge Case 4: AI text heavily edited by humans
+
+Issue:
+
+Mixed signal contamination  
+
+Failure mode:
+
+System may classify as “uncertain” despite AI origin (acceptable but expected limitation)
+
+# 6. Architecture
+
+## Submission Flow
+
+Client  
+  → POST /submit (raw text)  
+    → Rate Limiter (Flask-Limiter)  
+      → Signal 1: LLM (Groq)  
+        → llm_score (0–1)  
+      → Signal 2: Stylometry (Python)  
+        → style_score (0–1)  
+      → Confidence Scoring Engine  
+        → final_score (0–1)  
+      → Transparency Label Generator  
+        → human-readable label text  
+      → Audit Logger (SQLite/JSON)  
+        → stores full decision trace  
+      → API Response (classification + confidence + label)  
+
+---
+
+## Appeal Flow
+
+Client  
+  → POST /appeal (content_id, reason)  
+    → Appeals Handler  
+      → Validate content_id  
+      → Update status = under_review  
+      → Append to Audit Log  
+      → Store appeal metadata  
+      → API Response (confirmation)
+## Narrative Summary 
+
+The system processes submitted text through two independent detection signals: an LLM-based semantic classifier and a stylometric heuristic analyzer. Their outputs are combined into a calibrated confidence score, which is mapped to a transparency label shown to the user. Appeals allow creators to challenge decisions, updating system state and preserving full audit traceability.
+
+# 7. AI Tool Plan
+
+## M3 — Submission Endpoint + First Signal
+
+Spec sections provided to AI:
+
+- Detection Signals (LLM signal only)  
+- Architecture diagram  
+- API surface (POST /submit)  
+
+Task for AI tool:
+
+- Flask app skeleton  
+- `/submit` endpoint  
+- Groq LLM classification function  
+
+Verification:
+
+Test `/submit` with:  
+- clearly AI-like text  
+- clearly human-like text  
+
+Confirm LLM score varies meaningfully  
+
+---
+
+## M4 — Second Signal + Confidence Scoring
+
+Spec sections provided:
+
+- Detection Signals (both signals)  
+- Uncertainty Representation  
+- Architecture diagram  
+
+Task:
+
+- Implement stylometric function  
+- Implement scoring fusion logic  
+- Return calibrated confidence  
+
+Verification:
+
+Compare outputs across:  
+- repetitive AI text  
+- varied human writing  
+
+Ensure non-binary distribution (no clustering at 0.5 or 1.0)  
+
+---
+
+## M5 — Production Layer (Labels + Appeals)
+
+Spec sections provided:
+
+- Transparency Label Design  
+- Appeals Workflow  
+- Architecture diagram  
+
+Task:
+
+- Implement label generator  
+- Implement `/appeal` endpoint  
+- Implement audit log updates  
+
+Verification:
+
+All 3 label states reachable:  
+- AI  
+- Human  
+- Uncertain  
+
+Submit appeal → verify:  
+- status = under_review  
+- audit log updated
