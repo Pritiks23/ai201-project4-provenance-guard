@@ -199,3 +199,28 @@ Prompted AI: diagnosis of `dquote>` shell error in curl requests and JSON escapi
 AI output: recommended switching to double-quoted JSON payload with escaped internal quotes  
 
 What was changed: manually rewrote curl commands using proper JSON escaping and verified against local server responses
+
+
+Rate Limiting
+# Rate Limiting Test
+
+```bash
+for i in $(seq 1 12); do
+  curl -s -o /dev/null -w "%{http_code}\n" \
+  -X POST http://127.0.0.1:5000/submit \
+  -H "Content-Type: application/json" \
+  -d '{"text":"test","creator_id":"ratelimit"}'
+done
+
+200
+200
+200
+200
+200
+200
+200
+200
+200
+200
+429
+429
